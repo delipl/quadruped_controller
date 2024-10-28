@@ -34,8 +34,19 @@ target_include_directories(effector_joint_state_publisher PUBLIC
 ament_target_dependencies(effector_joint_state_publisher rclcpp sensor_msgs    geometry_msgs
 tf2_ros)
 
+add_executable(inverse_kinematics_test src/leg.cpp src/inverse_kinematics_test.cpp)
+target_link_libraries (inverse_kinematics_test Eigen3::Eigen)
+
+target_include_directories(inverse_kinematics_test PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+ament_target_dependencies(inverse_kinematics_test rclcpp sensor_msgs    geometry_msgs
+tf2_ros)
+
+
 install(TARGETS
-  quadruped_controller effector_joint_state_publisher
+  quadruped_controller effector_joint_state_publisher inverse_kinematics_test
 
   DESTINATION lib/${PROJECT_NAME})
 

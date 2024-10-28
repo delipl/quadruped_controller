@@ -17,9 +17,9 @@ struct JointState {
   double effort;
 };
 
-const double UPPER_BONE_LENGTH = 0.15;
-const double LOWER_BONE_LENGTH = 0.35;
-const double FOOT_LENGTH = 0.05;
+const double UPPER_BONE_LENGTH = 0.125;
+const double LOWER_BONE_LENGTH = 0.21;
+const double FOOT_LENGTH = 0.045;
 
 class Leg {
 public:
@@ -30,13 +30,23 @@ public:
   Eigen::Vector3d forward_kinematics(const Eigen::Vector3d &q);
   Eigen::Vector3d forward_kinematics() {
     return forward_kinematics(
-        Eigen::Vector3d(adduction.position, hip_.position, knee_.position));
+        Eigen::Vector3d(first_.position, second_.position, third_.position));
   }
 
-  Eigen::Vector3d invert_kinematics(const Eigen::Vector3d &x);
+  Eigen::Vector3d inverse_kinematics(const Eigen::Vector3d &x);
 
   std::pair<JointState, JointState> get_passive_knee_joints() const {
-    return {passive_knee_front_, passive_knee_rear_};
+    return {forth_, fifth_};
+  }
+
+  std::array<JointState, 5> get_joints_states() const {
+    return {first_, second_, third_, forth_, fifth_};
+  }
+
+  void set_joints_states(const Eigen::Vector3d &q){
+    first_.position = q(0);
+    second_.position = q(1);
+    third_.position = q(2);
   }
 
   double get_distance_to_effector() const { return distance_to_effector_; }
@@ -48,15 +58,17 @@ private:
   const double l4 = LOWER_BONE_LENGTH;
   const double l5 = FOOT_LENGTH;
 
-  JointState adduction;
-  JointState hip_;
-  JointState knee_;
-  JointState passive_knee_front_;
-  JointState passive_knee_rear_;
+  double z_axis_q1_direction_ = 1.0;
+  double z_axis_q2_direction_ = 1.0;
+  double passive_side_multiplier_ = 1.0;
 
-  void calculate_passive_joints(const Eigen::Vector3d &effector_position,
-                                double th4);
-  Eigen::Vector3d get_effector_position(double q3);
+  JointState first_;
+  JointState second_;
+  JointState third_;
+  JointState forth_;
+  JointState fifth_;
+
+  void update_effector_position(double q3);
   Eigen::Matrix4d denavite_hartenberg(double alpha, double a, double d,
                                       double theta);
   double distance_to_effector_;
