@@ -20,14 +20,10 @@ Leg::Leg(const std::string &name) {
     z_axis_q2_direction_ = 1.0;
     passive_side_multiplier_ = 1.0;
   } else if (name == "rear_right") {
-    z_axis_q1_direction_ = -1.0;
-    z_axis_q2_direction_ = 1.0;
+    z_axis_q1_direction_ = 1.0;
+    z_axis_q2_direction_ = -1.0;
     passive_side_multiplier_ = -1.0;
   }
-
-  // if (name == "rear_right") {
-  //   z_axis = -1.0;
-  // }
 
   first_.name = name + "_first_joint";
   second_.name = name + "_second_joint";
@@ -81,9 +77,9 @@ Eigen::Vector3d Leg::forward_kinematics(const Eigen::Vector3d &q) {
   auto A01 = denavite_hartenberg(0.0, 0.0, 0.031 + 0.064, q(0));
   auto A12 =
       denavite_hartenberg(z_axis_q1_direction_ * (q(1) + M_PI),
-                          z_axis_q1_direction_ * (0.023 + 0.0555), -0.125, 0.0);
+                          z_axis_q1_direction_ * (0.023 + 0.0555), -l1, 0.0);
   auto A23 = denavite_hartenberg(z_axis_q2_direction_ * fifth_.position,
-                                 z_axis_q1_direction_ * 0.018, 0.28, 0.0);
+                                 z_axis_q1_direction_ * 0.018, l4 + l5, 0.0);
 
   Eigen::Vector4d versor;
   versor << 0, 0, 0, 1;
@@ -115,40 +111,67 @@ void Leg::update_effector_position(double q3) {
   const auto xe1 = l2 * c2 + l3 * c3;
   const auto ye1 = l2 * s2 + l3 * s3;
 
-  const auto nan = std::numeric_limits<double>::quiet_NaN();
-
   const auto x = xe1 + l5 * c3;
   const auto y = ye1 + l5 * s3;
-
 
   fifth_.position = -passive_side_multiplier_ * (M_PI - th2 + th3);
   forth_.position = passive_side_multiplier_ * (M_PI - th4);
 }
 
-// https://mecheng.iisc.ac.in/~asitava/NPTEL/module4.pdf
-//  page 50
+// Szrek PhD thesis
 Eigen::Vector3d Leg::inverse_kinematics(const Eigen::Vector3d &x) {
   Eigen::Vector3d q;
 
   const double xe = x(0);
   const double ye = x(1);
 
-  const auto e = std::sqrt(xe * xe + ye * ye);
+  const double l_BE = l4 + l5;
+  const double l_AB = l1;
 
-  const auto cos_theta1_gamma =
-      std::cos((l3 * l3 - l1 * l1 - e * e) / (2 * l1 * e));
+  const double xe2 = xe * xe;
+  const double ye2 = ye * ye;
 
-  const auto beta = std::atan2(ye, xe);
-  const auto gamma = 2 * M_PI - beta;
-  const auto theta1 = gamma + std::acos(cos_theta1_gamma);
+  const double Q = (l_AB * l_AB - l_BE * l_BE + ye2 + xe2) / (2 * ye);
+  const double W = Q * Q - l_AB * l_AB;
+  const double T = -(2 * Q * xe) / (ye);
+  const double V = 1 + (xe2) / (ye2);
 
-  const auto cos_alpha = (l1 * l1 - e * e + l3 * l3) / (2 * l1 * l3);
+  const double delta = T * T - 4 * V * W;
+  const double sqrt_delta = std::sqrt(delta);
 
-  q(2) = std::acos((2 * l1 * l1 - 2 * l1 * l3 * cos_alpha) / (2 * e * l1));
-  q(1) = 2 * M_PI - theta1 + q(2);
+  // FIXME: It cannot derive y < 0.0
+  const double yb1 = (-T + sqrt_delta) / (2 * V);
+  const double yb2 = (-T - sqrt_delta) / (2 * V);
+  const double xb1 = std::sqrt(l_AB * l_AB - yb1 * yb1);
+  const double xb2 = std::sqrt(l_AB * l_AB - yb2 * yb2);
+
+
+  double xb = yb1;
+  double yb = xb1;
+
+  const Eigen::Vector2d b = {xb, yb};
+  const Eigen::Vector2d e = {xe, ye};
+  const Eigen::Vector2d be = e - b;
+
+  const double gamma = std::atan2(be(1), (be(0)));
+  const double l_BC = l4;
+
+  Eigen::Vector2d C =
+      b + Eigen::Vector2d{std::cos(gamma) * l_BC, std::sin(gamma) * l_BC};
+
+  const auto theta_b = std::atan2(b(1), b(0));
+  const auto c = C.norm();
+  const auto alpha = std::acos((c * c + l2 * l2 - l3 * l3) / (2 * c * l2));
+  const auto beta = std::acos((c * c + l1 * l1 - l4 * l4) / (2 * c * l1));
+
   q(0) = 0.0;
-
+  q(1) = z_axis_q1_direction_* theta_b ;
+  q(2) = z_axis_q2_direction_ *(M_PI - beta - alpha);
   return q;
 }
 
 } // namespace quadruped_controller
+
+// ros2 topic pub /effector_position  geometry_msgs/msg/PoseStamped  "{ header:
+// {stamp: now,  frame_id: front_left_second_link},  pose: { position: { x:
+// 0.064, y: 0.2, z: 0.0785 } }}"

@@ -19,7 +19,7 @@ struct JointState {
 
 const double UPPER_BONE_LENGTH = 0.125;
 const double LOWER_BONE_LENGTH = 0.21;
-const double FOOT_LENGTH = 0.045;
+const double FOOT_LENGTH = 0.07;
 
 class Leg {
 public:

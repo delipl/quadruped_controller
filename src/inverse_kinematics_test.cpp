@@ -13,6 +13,9 @@ public:
         "effector_position", 10,
         std::bind(&InverseKinematicsTest::position_callback, this,
                   std::placeholders::_1));
+
+    position_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>(
+        "effector_position_help", 10);
     publisher_ = this->create_publisher<sensor_msgs::msg::JointState>(
         "joint_states", 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
@@ -26,6 +29,7 @@ public:
 private:
   void position_callback(const geometry_msgs::msg::PoseStamped pose) {
     std::vector<Eigen::Vector3d> effector_positions;
+    std::vector<Eigen::Vector3d> helpers;
     auto effector_position = pose.pose.position; 
     auto calculated_msg = sensor_msgs::msg::JointState();
     calculated_msg.header.stamp = this->now();
@@ -34,8 +38,11 @@ private:
       Eigen::Vector3d x;
       x << effector_position.x, effector_position.y, effector_position.z;
 
+      Eigen::Vector3d help;
       auto q = leg.inverse_kinematics(x);
+      helpers.push_back(help);
       leg.set_joints_states(q);
+      std::cout << "Input: x: " << x(0) << "\ty: " << x(1) << "\tz: " << x(2) << std::endl;
       std::cout << "Control: q1: " << q(0) << "\tq2: " << q(1)
                 << "\tq3: " << q(2) << std::endl;
 
@@ -66,10 +73,20 @@ private:
 
       tf_broadcaster_->sendTransform(transform);
     }
+
+    auto position_msg = geometry_msgs::msg::PoseStamped();
+    position_msg.header.stamp = this->now();
+    position_msg.header.frame_id = legs_names[0] + "_leg_deltoid";
+    position_msg.pose.position.x = helpers[0](0);
+    position_msg.pose.position.y = helpers[0](1);
+    position_msg.pose.position.z = helpers[0](2);
+
+    position_publisher_->publish(position_msg);
   }
 
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr subscription_;
   rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr position_publisher_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   std::vector<quadruped_controller::Leg> legs;
