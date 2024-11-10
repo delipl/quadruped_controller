@@ -1,53 +1,121 @@
 cmake_minimum_required(VERSION 3.5)
 project(quadruped_controller)
 
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(sensor_msgs REQUIRED)
-find_package(trajectory_msgs REQUIRED)
-find_package(control_msgs REQUIRED)
-find_package(rclcpp_action REQUIRED)
-find_package (Eigen3 3.3 REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(tf2_ros REQUIRED)
-
-add_executable(quadruped_controller src/controller.cpp)
-
-ament_target_dependencies(quadruped_controller
-  rclcpp
-  sensor_msgs
-  trajectory_msgs
+set(THIS_PACKAGE_INCLUDE_DEPENDS
   control_msgs
-  rclcpp_action
-  Eigen3
+  controller_interface
   geometry_msgs
+  hardware_interface
+  nav_msgs
+  pluginlib
+  rclcpp
+  rclcpp_lifecycle
+  realtime_tools
+  sensor_msgs
+  std_srvs
   tf2_ros
+  trajectory_msgs
+  quadruped_msgs
+
 )
 
-add_executable(effector_joint_state_publisher src/leg.cpp src/effector_joint_state_publisher.cpp)
-target_link_libraries (effector_joint_state_publisher Eigen3::Eigen)
+find_package(ament_cmake REQUIRED)
+find_package(generate_parameter_library REQUIRED)
+find_package(ament_cmake_gmock REQUIRED)
+find_package(controller_manager REQUIRED)
+find_package(hardware_interface REQUIRED)
+find_package(ros2_control_test_assets REQUIRED)
+find_package (Eigen3 3.3 REQUIRED)
 
-target_include_directories(effector_joint_state_publisher PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+foreach(Dependency IN ITEMS ${THIS_PACKAGE_INCLUDE_DEPENDS})
+  find_package(${Dependency} REQUIRED)
+endforeach()
 
-ament_target_dependencies(effector_joint_state_publisher rclcpp sensor_msgs    geometry_msgs
-tf2_ros)
+# Add quadruped_controller library related compile commands
+generate_parameter_library(quadruped_controller_parameters
+  src/quadruped_controller.yaml
+  include/quadruped_controller/validate_quadruped_controller_parameters.hpp
+)
+add_library(
+  quadruped_controller
+  SHARED
+  src/quadruped_controller.cpp
+)
+target_include_directories(quadruped_controller PUBLIC
+  "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+target_link_libraries(quadruped_controller quadruped_controller_parameters)
+ament_target_dependencies(quadruped_controller ${THIS_PACKAGE_INCLUDE_DEPENDS})
+target_compile_definitions(quadruped_controller PRIVATE "QUADRUPED_CONTROLLER_BUILDING_DLL")
 
-add_executable(inverse_kinematics_test src/leg.cpp src/inverse_kinematics_test.cpp)
-target_link_libraries (inverse_kinematics_test Eigen3::Eigen)
+pluginlib_export_plugin_description_file(
+  controller_interface quadruped_controller.xml)
 
-target_include_directories(inverse_kinematics_test PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
+install(
+  TARGETS
+  quadruped_controller
+  RUNTIME DESTINATION bin
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+)
 
-ament_target_dependencies(inverse_kinematics_test rclcpp sensor_msgs    geometry_msgs
-tf2_ros)
+install(
+  DIRECTORY include/
+  DESTINATION include/${PROJECT_NAME}
+)
 
+# TESTS
+  # ament_add_gmock(test_load_quadruped_controller test/test_load_quadruped_controller.cpp)
+  # target_include_directories(test_load_quadruped_controller PRIVATE include)
+  # ament_target_dependencies(
+  #   test_load_quadruped_controller
+  #   controller_manager
+  #   hardware_interface
+  #   ros2_control_test_assets
+  # )
 
-install(TARGETS
-  quadruped_controller effector_joint_state_publisher inverse_kinematics_test
+  # add_rostest_with_parameters_gmock(test_quadruped_controller test/test_quadruped_controller.cpp ${CMAKE_CURRENT_SOURCE_DIR}/test/quadruped_controller_params.yaml)
+  # target_include_directories(test_quadruped_controller PRIVATE include)
+  # target_link_libraries(test_quadruped_controller quadruped_controller)
+  # ament_target_dependencies(
+  #   test_quadruped_controller
+  #   controller_interface
+  #   hardware_interface
+  # )
 
-  DESTINATION lib/${PROJECT_NAME})
+  # add_rostest_with_parameters_gmock(test_quadruped_controller_preceeding test/test_quadruped_controller_preceeding.cpp ${CMAKE_CURRENT_SOURCE_DIR}/test/quadruped_controller_preceeding_params.yaml)
+  # target_include_directories(test_quadruped_controller_preceeding PRIVATE include)
+  # target_link_libraries(test_quadruped_controller_preceeding quadruped_controller)
+  # ament_target_dependencies(
+  #   test_quadruped_controller_preceeding
+  #   controller_interface
+  #   hardware_interface
+  # )
+
+add_executable(quadruped_controller_node src/inverse_kinematics_test.cpp src/leg.cpp)
+
+target_include_directories(quadruped_controller_node PUBLIC
+  "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+
+ament_target_dependencies(quadruped_controller_node
+ ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+
+target_link_libraries(quadruped_controller_node Eigen3::Eigen)
+
+install(TARGETS quadruped_controller_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_export_include_directories(
+  include
+)
+ament_export_dependencies(
+  ${THIS_PACKAGE_INCLUDE_DEPENDS}
+)
+ament_export_libraries(
+  quadruped_controller
+)
 
 ament_package()

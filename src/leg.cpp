@@ -73,6 +73,7 @@ Eigen::Vector3d Leg::forward_kinematics(const Eigen::Vector3d &q) {
 
   update_effector_position(q(2));
 
+
   // TODO: warning this pi will be negative in another side
   auto A01 = denavite_hartenberg(0.0, 0.0, 0.031 + 0.064, q(0));
   auto A12 =
@@ -145,7 +146,6 @@ Eigen::Vector3d Leg::inverse_kinematics(const Eigen::Vector3d &x) {
   const double xb1 = std::sqrt(l_AB * l_AB - yb1 * yb1);
   const double xb2 = std::sqrt(l_AB * l_AB - yb2 * yb2);
 
-
   double xb = yb1;
   double yb = xb1;
 
@@ -165,8 +165,8 @@ Eigen::Vector3d Leg::inverse_kinematics(const Eigen::Vector3d &x) {
   const auto beta = std::acos((c * c + l1 * l1 - l4 * l4) / (2 * c * l1));
 
   q(0) = 0.0;
-  q(1) = z_axis_q1_direction_* theta_b ;
-  q(2) = z_axis_q2_direction_ *(M_PI - beta - alpha);
+  q(1) = z_axis_q1_direction_ * theta_b;
+  q(2) = z_axis_q2_direction_ * (M_PI - beta - alpha);
   return q;
 }
 

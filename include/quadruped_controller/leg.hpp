@@ -62,6 +62,8 @@ private:
   double z_axis_q2_direction_ = 1.0;
   double passive_side_multiplier_ = 1.0;
 
+  
+
   JointState first_;
   JointState second_;
   JointState third_;
