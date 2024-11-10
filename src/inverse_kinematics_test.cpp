@@ -6,6 +6,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "tf2_ros/transform_broadcaster.h"
+#include "trajectory_msgs/msg/joint_trajectory.hpp"
 
 class InverseKinematicsTest : public rclcpp::Node {
 public:
@@ -17,9 +18,18 @@ public:
             std::bind(&InverseKinematicsTest::control_callback, this,
                       std::placeholders::_1));
 
-    publisher_ = this->create_publisher<sensor_msgs::msg::JointState>(
-        "joint_states", 10);
+    control_joint_state_pub_ =
+        this->create_publisher<sensor_msgs::msg::JointState>(
+            "control_joint_states", 10);
+
+    trajectory_pub_ =
+        this->create_publisher<trajectory_msgs::msg::JointTrajectory>(
+            "/joint_trajectory_controller/joint_trajectory", 10);
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
+    timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(100),
+        std::bind(&InverseKinematicsTest::timer_callback, this));
 
     for (const auto &leg_name : legs_names) {
       quadruped_controller::Leg leg(leg_name);
@@ -30,7 +40,7 @@ public:
 private:
   void control_callback(const quadruped_msgs::msg::QuadrupedControl msg) {
     using Point = geometry_msgs::msg::Point;
-    std::vector<Eigen::Vector3d> foot_positions;
+    
 
     auto passive_joint_state = sensor_msgs::msg::JointState();
     passive_joint_state.header.stamp = msg.header.stamp;
@@ -38,6 +48,11 @@ private:
     std::vector<Point> reference_foot_positions = {
         msg.fl_foot_position, msg.fr_foot_position, msg.rl_foot_position,
         msg.rr_foot_position};
+
+    trajectory_msgs::msg::JointTrajectoryPoint point;
+    auto l = joint_trajectory.points.size();
+    double sec= (l+1)* 0.05;
+    point.time_from_start = rclcpp::Duration(0, sec*1e9);
 
     for (std::size_t i = 0; i < legs.size(); ++i) {
       auto &leg = legs[i];
@@ -51,50 +66,62 @@ private:
       auto q = leg.inverse_kinematics(x);
       leg.set_joints_states(q);
       auto foot_position = leg.forward_kinematics();
-      foot_positions.push_back(foot_position);
 
+      std::cout << i << ": Reference: " << x.transpose() << std::endl;
+      std::cout << i << ": Inverse kinematics: " << q.transpose() << std::endl;
+      std::cout << i << ": Forward kinematics: " << foot_position.transpose()
+                << std::endl;
 
-      std::cout << i<< ": Reference: " << x.transpose() << std::endl;
-      std::cout << i<< ": Inverse kinematics: " << q.transpose() << std::endl;
-      std::cout << i<< ": Forward kinematics: "
-                << foot_position.transpose() << std::endl;
+      auto joint_states = leg.get_active_joint_states();
 
-      auto joint_states = leg.get_joints_states();
+      for (const auto &joint_state : joint_states) {
+        if (joint_trajectory.joint_names.size() < 12) {
+          joint_trajectory.joint_names.push_back(joint_state.name);
+        }
+        point.positions.push_back(joint_state.position);
+      }
 
       for (const auto &joint_state : joint_states) {
         passive_joint_state.name.push_back(joint_state.name);
-        passive_joint_state.position.push_back(joint_state.position);
+        passive_joint_state.position.push_back(0.0 /*joint_state.position*/);
         passive_joint_state.velocity.push_back(joint_state.velocity);
         passive_joint_state.effort.push_back(joint_state.effort);
       }
     }
-    
-    for (std::size_t i = 0; i < legs.size(); ++i) {
-      geometry_msgs::msg::TransformStamped transform;
-      transform.header.stamp = now();
-      transform.header.frame_id = legs_names[i] + "_first_link";
-      transform.child_frame_id = legs_names[i] + "_foot";
 
-      transform.transform.translation.x = foot_positions[i](0);
-      transform.transform.translation.y = foot_positions[i](1);
-      transform.transform.translation.z = foot_positions[i](2);
+    joint_trajectory.points.push_back(point);
 
-      tf_broadcaster_->sendTransform(transform);
+    control_joint_state_pub_->publish(passive_joint_state);
+  }
+
+  void timer_callback() {
+    if (joint_trajectory.points.size() < 40) {
+      return;
     }
 
-    publisher_->publish(passive_joint_state);
+    joint_trajectory.header.stamp = now();
+    trajectory_pub_->publish(joint_trajectory);
+    joint_trajectory.points.clear();
   }
 
   rclcpp::Subscription<quadruped_msgs::msg::QuadrupedControl>::SharedPtr
       subscription_;
-  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr publisher_;
+  rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr
+      control_joint_state_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr
-      position_publisher_;
+      position_control_joint_state_pub_;
+
+  rclcpp::TimerBase::SharedPtr timer_;
+
+  rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr
+      trajectory_pub_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
   std::vector<quadruped_controller::Leg> legs;
   std::vector<std::string> legs_names = {"front_left", "front_right",
                                          "rear_left", "rear_right"};
+
+  trajectory_msgs::msg::JointTrajectory joint_trajectory;
 };
 
 int main(int argc, char *argv[]) {

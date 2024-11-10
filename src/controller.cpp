@@ -15,7 +15,7 @@ public:
         action_client_(rclcpp_action::create_client<FollowJointTrajectory>(
             this, "/joint_trajectory_controller/follow_joint_trajectory")) {
     subscription_ = this->create_subscription<sensor_msgs::msg::JointState>(
-        "joint_states", 10,
+        "control_joint_states", 10,
         std::bind(&JointStateListener::jointStateCallback, this,
                   std::placeholders::_1));
   }
@@ -25,6 +25,7 @@ private:
     if (initialized_) {
       return;
     }
+
     RCLCPP_INFO(this->get_logger(), "Received joint state");
     auto goal_msg = FollowJointTrajectory::Goal();
     trajectory_msgs::msg::JointTrajectory traj_msg;
@@ -33,7 +34,6 @@ private:
     traj_msg.joint_names = msg->name;
     trajectory_msgs::msg::JointTrajectoryPoint point;
     point.positions = msg->position;
-    point.positions[0] = 0.0;
     point.time_from_start = rclcpp::Duration(1, 0); // 1 second duration
     traj_msg.points.push_back(point);
 
@@ -85,6 +85,7 @@ private:
     switch (result.code) {
     case rclcpp_action::ResultCode::SUCCEEDED:
       RCLCPP_INFO(this->get_logger(), "Goal succeeded");
+      initialized_ = false;
       break;
     case rclcpp_action::ResultCode::ABORTED:
       RCLCPP_ERROR(this->get_logger(), "Goal was aborted");

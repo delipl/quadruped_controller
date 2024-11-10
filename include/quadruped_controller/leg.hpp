@@ -25,7 +25,8 @@ class Leg {
 public:
   Leg(const std::string &name);
 
-  void get_joint_states(const sensor_msgs::msg::JointState::SharedPtr msg);
+  void set_positions_from_joint_states(
+      const sensor_msgs::msg::JointState::SharedPtr msg);
 
   Eigen::Vector3d forward_kinematics(const Eigen::Vector3d &q);
   Eigen::Vector3d forward_kinematics() {
@@ -43,7 +44,11 @@ public:
     return {first_, second_, third_, forth_, fifth_};
   }
 
-  void set_joints_states(const Eigen::Vector3d &q){
+  std::array<JointState, 3> get_active_joint_states() {
+    return {first_, second_, third_};
+  }
+
+  void set_joints_states(const Eigen::Vector3d &q) {
     first_.position = q(0);
     second_.position = q(1);
     third_.position = q(2);
@@ -61,8 +66,6 @@ private:
   double z_axis_q1_direction_ = 1.0;
   double z_axis_q2_direction_ = 1.0;
   double passive_side_multiplier_ = 1.0;
-
-  
 
   JointState first_;
   JointState second_;

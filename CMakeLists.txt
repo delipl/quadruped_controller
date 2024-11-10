@@ -93,18 +93,32 @@ install(
   # )
 
 add_executable(quadruped_controller_node src/inverse_kinematics_test.cpp src/leg.cpp)
-
 target_include_directories(quadruped_controller_node PUBLIC
   "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
   "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
-
 ament_target_dependencies(quadruped_controller_node
  ${THIS_PACKAGE_INCLUDE_DEPENDS}
 )
-
 target_link_libraries(quadruped_controller_node Eigen3::Eigen)
 
-install(TARGETS quadruped_controller_node
+add_executable(controller src/controller.cpp)
+target_include_directories(controller PUBLIC
+  "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+
+ament_target_dependencies(controller ${THIS_PACKAGE_INCLUDE_DEPENDS})
+
+add_executable(passive_joint_state_broadcaster src/effector_joint_state_publisher.cpp src/leg.cpp)
+
+target_include_directories(passive_joint_state_broadcaster PUBLIC
+  "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include/${PROJECT_NAME}>")
+
+ament_target_dependencies(passive_joint_state_broadcaster ${THIS_PACKAGE_INCLUDE_DEPENDS})
+target_link_libraries(passive_joint_state_broadcaster Eigen3::Eigen )
+
+
+install(TARGETS quadruped_controller_node controller passive_joint_state_broadcaster
   DESTINATION lib/${PROJECT_NAME}
 )
 

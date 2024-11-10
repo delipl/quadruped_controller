@@ -33,7 +33,7 @@ Leg::Leg(const std::string &name) {
   fifth_.name = name + "_fifth_joint";
 }
 
-void Leg::get_joint_states(const sensor_msgs::msg::JointState::SharedPtr msg) {
+void Leg::set_positions_from_joint_states(const sensor_msgs::msg::JointState::SharedPtr msg) {
   for (size_t i = 0; i < msg->name.size(); ++i) {
     if (msg->name[i] == first_.name) {
       first_.position = msg->position[i];
